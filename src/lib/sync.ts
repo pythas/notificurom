@@ -103,8 +103,8 @@ export async function runSync(): Promise<SyncResult[]> {
         }
       }
 
-      // Check items currently in DB that were not in the search results (likely closed since query was `is:open`)
-      if (config.autoArchiveClosed && ingestor instanceof GitHubIngestor) {
+      // Check items currently in DB that were not in the search results (closed, unassigned, or deleted)
+      if (ingestor instanceof GitHubIngestor) {
         const activeTasks = db
           .select()
           .from(tasks)
@@ -125,18 +125,35 @@ export async function runSync(): Promise<SyncResult[]> {
           );
 
           for (const [sourceId, statusInfo] of checkedStatusMap.entries()) {
-            if (statusInfo.isClosed) {
-              db.update(tasks)
-                .set({
-                  isClosed: true,
-                  status: 'done',
-                  statusUpdatedAt: now,
-                  updatedAt: now,
-                  ...(statusInfo.title ? { title: statusInfo.title } : {}),
-                })
+            if (statusInfo.isNotFound || statusInfo.isUnassigned) {
+              // Assignment was removed or issue was deleted - remove from board
+              db.delete(tasks)
                 .where(eq(tasks.sourceId, sourceId))
                 .run();
-              result.autoResolved++;
+              result.removed = (result.removed || 0) + 1;
+            } else if (statusInfo.isClosed) {
+              if (config.autoArchiveClosed) {
+                db.update(tasks)
+                  .set({
+                    isClosed: true,
+                    status: 'done',
+                    statusUpdatedAt: now,
+                    updatedAt: now,
+                    ...(statusInfo.title ? { title: statusInfo.title } : {}),
+                  })
+                  .where(eq(tasks.sourceId, sourceId))
+                  .run();
+                result.autoResolved++;
+              } else {
+                db.update(tasks)
+                  .set({
+                    isClosed: true,
+                    updatedAt: now,
+                    ...(statusInfo.title ? { title: statusInfo.title } : {}),
+                  })
+                  .where(eq(tasks.sourceId, sourceId))
+                  .run();
+              }
             }
           }
         }

@@ -40,12 +40,42 @@ interface GitHubSearchResponse {
   items: GitHubSearchItem[];
 }
 
+export interface GitHubItemStatus {
+  isClosed: boolean;
+  isNotFound?: boolean;
+  isUnassigned?: boolean;
+  title?: string;
+}
+
 export class GitHubIngestor implements Ingestor {
   readonly name = 'github';
 
   async isEnabled(): Promise<boolean> {
     const config = await getAppConfig();
     return Boolean(config.githubPat && config.githubPat.trim().length > 0);
+  }
+
+  async getCurrentUser(): Promise<string | null> {
+    const config = await getAppConfig();
+    if (!config.githubPat) return null;
+    try {
+      const res = await fetch('https://api.github.com/user', {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${config.githubPat.trim()}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'Notificurom-GTD-App',
+        },
+        cache: 'no-store',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.login || null;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
   }
 
   private extractRepoFromUrl(htmlUrl: string, repositoryUrl: string): string {
@@ -144,11 +174,14 @@ export class GitHubIngestor implements Ingestor {
     return Array.from(itemsMap.values());
   }
 
-  // Helper method to check status of tracked GitHub items to detect closed/merged state
-  async checkItemsStatus(sourceIds: string[]): Promise<Map<string, { isClosed: boolean; title?: string }>> {
+  // Helper method to check status of tracked GitHub items to detect closed/merged state or unassignment
+  async checkItemsStatus(sourceIds: string[]): Promise<Map<string, GitHubItemStatus>> {
     const config = await getAppConfig();
-    const result = new Map<string, { isClosed: boolean; title?: string }>();
+    const result = new Map<string, GitHubItemStatus>();
     if (!config.githubPat || sourceIds.length === 0) return result;
+
+    const currentUser = await this.getCurrentUser();
+    const currentUsername = currentUser ? currentUser.toLowerCase() : null;
 
     // Filter github sourceIds: format `github:owner/repo#123`
     const githubItems = sourceIds
@@ -158,30 +191,96 @@ export class GitHubIngestor implements Ingestor {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
-    // Batch query issues or check individual endpoints if small batch
-    // Using search query with issue numbers or repo is effective
-    // For small batches, we can fetch repo issue endpoint or search
-    for (const item of githubItems.slice(0, 50)) {
-      try {
-        const res = await fetch(`https://api.github.com/repos/${item.owner}/${item.repo}/issues/${item.number}`, {
-          headers: {
-            Accept: 'application/vnd.github+json',
-            Authorization: `Bearer ${config.githubPat.trim()}`,
-            'X-GitHub-Api-Version': '2022-11-28',
-            'User-Agent': 'Notificurom-GTD-App',
-          },
-          cache: 'no-store',
-        });
-        if (res.ok) {
-          const data = await res.json();
-          result.set(item.sourceId, {
-            isClosed: data.state === 'closed',
-            title: data.title,
-          });
-        }
-      } catch {
-        // ignore individual item check failure
-      }
+    const headers = {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${config.githubPat.trim()}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'Notificurom-GTD-App',
+    };
+
+    // Process items in parallel batches of 10
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < Math.min(githubItems.length, 100); i += BATCH_SIZE) {
+      const batch = githubItems.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (item) => {
+          try {
+            const res = await fetch(
+              `https://api.github.com/repos/${item.owner}/${item.repo}/issues/${item.number}`,
+              { headers, cache: 'no-store' }
+            );
+
+            if (res.status === 404 || res.status === 410) {
+              result.set(item.sourceId, { isClosed: false, isNotFound: true });
+              return;
+            }
+
+            if (!res.ok) return;
+
+            const data = await res.json();
+            const isClosed = data.state === 'closed';
+
+            if (isClosed) {
+              result.set(item.sourceId, {
+                isClosed: true,
+                isNotFound: false,
+                isUnassigned: false,
+                title: data.title,
+              });
+              return;
+            }
+
+            // If issue/PR is still open on GitHub, check if user is still assigned
+            let isUnassigned = false;
+            if (currentUsername) {
+              const assignees = (data.assignees || []).map((a: { login: string }) =>
+                a.login.toLowerCase()
+              );
+              const isAssigned = assignees.includes(currentUsername);
+
+              if (data.pull_request) {
+                // If it's a pull request and user is not in assignees, check requested_reviewers
+                if (!isAssigned) {
+                  try {
+                    const prRes = await fetch(
+                      `https://api.github.com/repos/${item.owner}/${item.repo}/pulls/${item.number}`,
+                      { headers, cache: 'no-store' }
+                    );
+                    if (prRes.ok) {
+                      const prData = await prRes.json();
+                      const reviewers = (prData.requested_reviewers || []).map(
+                        (r: { login: string }) => r.login.toLowerCase()
+                      );
+                      const isReviewer = reviewers.includes(currentUsername);
+                      if (!isReviewer) {
+                        isUnassigned = true;
+                      }
+                    } else {
+                      isUnassigned = true;
+                    }
+                  } catch {
+                    isUnassigned = true;
+                  }
+                }
+              } else {
+                // Regular issue: if not assigned to user anymore
+                if (!isAssigned) {
+                  isUnassigned = true;
+                }
+              }
+            }
+
+            result.set(item.sourceId, {
+              isClosed: false,
+              isNotFound: false,
+              isUnassigned,
+              title: data.title,
+            });
+          } catch {
+            // ignore individual item check failure
+          }
+        })
+      );
     }
 
     return result;

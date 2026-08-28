@@ -29,5 +29,6 @@ export interface SyncResult {
   created: number;
   updated: number;
   autoResolved: number;
+  removed?: number;
   errors: string[];
 }

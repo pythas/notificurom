@@ -1,4 +1,15 @@
 import { differenceInDays, differenceInHours, differenceInMinutes, parseISO } from 'date-fns';
+import { useSyncExternalStore } from 'react';
+
+const emptySubscribe = () => () => {};
+
+export function useMounted(): boolean {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
 
 export type AgeUrgency = 'fresh' | 'warning' | 'critical' | 'archived';
 

@@ -22,6 +22,7 @@ interface KanbanBoardProps {
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   searchFilter: string;
   sourceFilter: string;
+  onClearFilters?: () => void;
 }
 
 const COLUMNS: { id: TaskStatus; title: string }[] = [
@@ -37,6 +38,7 @@ export function KanbanBoard({
   setTasks,
   searchFilter,
   sourceFilter,
+  onClearFilters,
 }: KanbanBoardProps) {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -219,6 +221,8 @@ export function KanbanBoard({
               id={col.id}
               title={col.title}
               tasks={colTasks}
+              hasActiveFilters={Boolean(searchFilter.trim()) || sourceFilter !== 'all'}
+              onClearFilters={onClearFilters}
               onMoveColumn={handleMoveColumn}
               onDeleteTask={handleDeleteTask}
             />

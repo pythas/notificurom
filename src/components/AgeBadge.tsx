@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { getTaskAgeInfo } from '@/lib/date-utils';
+import { getTaskAgeInfo, useMounted } from '@/lib/date-utils';
 import { Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface AgeBadgeProps {
@@ -11,6 +11,8 @@ interface AgeBadgeProps {
 }
 
 export function AgeBadge({ sourceCreatedAt, statusUpdatedAt, isDone = false }: AgeBadgeProps) {
+  const mounted = useMounted();
+
   const { createdAgeText, stalledAgeText, urgency, totalDays, stalledDays } = getTaskAgeInfo(
     sourceCreatedAt,
     statusUpdatedAt,
@@ -35,17 +37,18 @@ export function AgeBadge({ sourceCreatedAt, statusUpdatedAt, isDone = false }: A
 
   return (
     <div
+      suppressHydrationWarning
       className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${badgeStyles}`}
-      title={`Age: ${createdAgeText} (${totalDays}d ago) • In this column: ${stalledAgeText} (${stalledDays}d)`}
+      title={mounted ? `Age: ${createdAgeText} (${totalDays}d ago) • In this column: ${stalledAgeText} (${stalledDays}d)` : undefined}
     >
       {urgency === 'critical' ? (
         <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
       ) : (
         <Clock className="w-3 h-3 shrink-0 opacity-70" />
       )}
-      <span>Age {createdAgeText}</span>
+      <span suppressHydrationWarning>Age {createdAgeText}</span>
       {stalledDays > 1 && (
-        <span className="opacity-70 text-[10px] pl-0.5 border-l border-current/30">
+        <span suppressHydrationWarning className="opacity-70 text-[10px] pl-0.5 border-l border-current/30">
           {stalledAgeText} here
         </span>
       )}

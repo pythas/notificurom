@@ -24,11 +24,17 @@ export function Dashboard({
   const [hasPat, setHasPat] = useState(initialHasPat);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(initialLastSync);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [justSynced, setJustSynced] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [banner, setBanner] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
+
+  const handleClearFilters = useCallback(() => {
+    setSearchFilter('');
+    setSourceFilter('all');
+  }, []);
 
   const refreshTasks = useCallback(async () => {
     try {
@@ -56,17 +62,28 @@ export function Dashboard({
           if (githubRes.errors && githubRes.errors.length > 0) {
             setBanner({
               type: 'error',
-              message: `Sync failed: ${githubRes.errors.join(', ')}`,
+              message: `Sync issue: ${githubRes.errors.join(', ')}`,
             });
           } else {
+            const parts = [
+              `${githubRes.fetched} fetched`,
+              `${githubRes.created} new`,
+              `${githubRes.updated} updated`,
+              `${githubRes.autoResolved} resolved`,
+            ];
+            if (githubRes.removed && githubRes.removed > 0) {
+              parts.push(`${githubRes.removed} unassigned removed`);
+            }
             setBanner({
               type: 'success',
-              message: `Synced ${githubRes.fetched} items from GitHub (${githubRes.created} new, ${githubRes.updated} updated, ${githubRes.autoResolved} resolved).`,
+              message: `Synced with GitHub: ${parts.join(', ')}.`,
             });
             setTimeout(() => setBanner(null), 5000);
           }
         }
         setLastSyncTime(new Date().toISOString());
+        setJustSynced(true);
+        setTimeout(() => setJustSynced(false), 2500);
         await refreshTasks();
       } else {
         setBanner({
@@ -113,11 +130,13 @@ export function Dashboard({
       <Navbar
         onSync={handleSync}
         isSyncing={isSyncing}
+        justSynced={justSynced}
         lastSyncTime={lastSyncTime}
         searchFilter={searchFilter}
         onSearchChange={setSearchFilter}
         sourceFilter={sourceFilter}
         onSourceFilterChange={setSourceFilter}
+        onClearFilters={handleClearFilters}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenNewTask={() => setIsNewTaskOpen(true)}
         totalTaskCount={tasks.filter((t) => t.status !== 'done').length}
@@ -173,6 +192,7 @@ export function Dashboard({
           setTasks={setTasks}
           searchFilter={searchFilter}
           sourceFilter={sourceFilter}
+          onClearFilters={handleClearFilters}
         />
       </main>
 

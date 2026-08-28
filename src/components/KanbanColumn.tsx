@@ -21,6 +21,8 @@ interface KanbanColumnProps {
   id: TaskStatus;
   title: string;
   tasks: Task[];
+  hasActiveFilters?: boolean;
+  onClearFilters?: () => void;
   onMoveColumn: (taskId: string, targetStatus: TaskStatus) => void;
   onDeleteTask: (taskId: string) => void;
 }
@@ -64,6 +66,8 @@ export function KanbanColumn({
   id,
   title,
   tasks,
+  hasActiveFilters = false,
+  onClearFilters,
   onMoveColumn,
   onDeleteTask,
 }: KanbanColumnProps) {
@@ -156,8 +160,19 @@ export function KanbanColumn({
         </SortableContext>
 
         {sortedTasks.length === 0 && (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 border-2 border-dashed border-zinc-800/60 rounded-lg text-center text-zinc-500 text-xs">
-            <span>No tasks in {title.toLowerCase()}</span>
+          <div className="flex-1 flex flex-col items-center justify-center p-6 border-2 border-dashed border-zinc-800/60 rounded-lg text-center text-zinc-500 text-xs gap-2">
+            <span>
+              {hasActiveFilters ? 'No tasks match filters' : `No tasks in ${title.toLowerCase()}`}
+            </span>
+            {hasActiveFilters && onClearFilters && (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium transition-colors"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         )}
       </div>
