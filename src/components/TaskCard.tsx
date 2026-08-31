@@ -5,6 +5,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Task, TaskStatus } from '@/db/schema';
 import { AgeBadge } from './AgeBadge';
+import { useMounted } from '@/lib/date-utils';
 import {
   ExternalLink,
   GitPullRequest,
@@ -37,6 +38,7 @@ interface CardMetadata {
 }
 
 export function TaskCard({ task, onMoveColumn, onDelete, isOverlay = false }: TaskCardProps) {
+  const mounted = useMounted();
   const {
     attributes,
     listeners,
@@ -50,7 +52,7 @@ export function TaskCard({ task, onMoveColumn, onDelete, isOverlay = false }: Ta
       type: 'Task',
       task,
     },
-    disabled: isOverlay,
+    disabled: !mounted || isOverlay,
   });
 
   const style = {
@@ -108,6 +110,8 @@ export function TaskCard({ task, onMoveColumn, onDelete, isOverlay = false }: Ta
     <div
       ref={setNodeRef}
       style={style}
+      data-task-id={task.id}
+      data-testid="task-card"
       className={`group relative bg-zinc-900/90 border border-zinc-800 hover:border-zinc-700 rounded-lg p-3.5 shadow-sm transition-all text-zinc-100 flex flex-col gap-2.5 select-none ${
         isDragging ? 'opacity-30 border-dashed border-indigo-500' : ''
       } ${isOverlay ? 'shadow-2xl ring-2 ring-indigo-500/80 rotate-1 scale-102 bg-zinc-900 z-50 cursor-grabbing' : ''}`}

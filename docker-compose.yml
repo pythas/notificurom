@@ -11,5 +11,6 @@ services:
       - ./data:/app/data
     environment:
       - NODE_ENV=production
-      - GITHUB_PAT=${GITHUB_PAT:-}
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID:-}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET:-}
       - CRON_SECRET=${CRON_SECRET:-}

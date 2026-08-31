@@ -13,12 +13,6 @@ interface AgeBadgeProps {
 export function AgeBadge({ sourceCreatedAt, statusUpdatedAt, isDone = false }: AgeBadgeProps) {
   const mounted = useMounted();
 
-  const { createdAgeText, stalledAgeText, urgency, totalDays, stalledDays } = getTaskAgeInfo(
-    sourceCreatedAt,
-    statusUpdatedAt,
-    isDone
-  );
-
   if (isDone) {
     return (
       <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-950/40 text-emerald-400 border border-emerald-800/40">
@@ -27,6 +21,21 @@ export function AgeBadge({ sourceCreatedAt, statusUpdatedAt, isDone = false }: A
       </div>
     );
   }
+
+  if (!mounted) {
+    return (
+      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border bg-zinc-900/60 text-zinc-400 border-zinc-800">
+        <Clock className="w-3 h-3 shrink-0 opacity-70" />
+        <span>Age...</span>
+      </div>
+    );
+  }
+
+  const { createdAgeText, stalledAgeText, urgency, totalDays, stalledDays } = getTaskAgeInfo(
+    sourceCreatedAt,
+    statusUpdatedAt,
+    isDone
+  );
 
   const badgeStyles = {
     fresh: 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40',
@@ -37,18 +46,17 @@ export function AgeBadge({ sourceCreatedAt, statusUpdatedAt, isDone = false }: A
 
   return (
     <div
-      suppressHydrationWarning
       className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${badgeStyles}`}
-      title={mounted ? `Age: ${createdAgeText} (${totalDays}d ago) • In this column: ${stalledAgeText} (${stalledDays}d)` : undefined}
+      title={`Age: ${createdAgeText} (${totalDays}d ago) • In this column: ${stalledAgeText} (${stalledDays}d)`}
     >
       {urgency === 'critical' ? (
         <AlertTriangle className="w-3 h-3 text-rose-400 shrink-0" />
       ) : (
         <Clock className="w-3 h-3 shrink-0 opacity-70" />
       )}
-      <span suppressHydrationWarning>Age {createdAgeText}</span>
+      <span>Age {createdAgeText}</span>
       {stalledDays > 1 && (
-        <span suppressHydrationWarning className="opacity-70 text-[10px] pl-0.5 border-l border-current/30">
+        <span className="opacity-70 text-[10px] pl-0.5 border-l border-current/30">
           {stalledAgeText} here
         </span>
       )}

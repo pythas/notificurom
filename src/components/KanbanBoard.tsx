@@ -8,11 +8,12 @@ import {
   DragOverEvent,
   DragEndEvent,
   PointerSensor,
+  KeyboardSensor,
   useSensor,
   useSensors,
   closestCorners,
 } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
+import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { Task, TaskStatus } from '@/db/schema';
 import { KanbanColumn } from './KanbanColumn';
 import { TaskCard } from './TaskCard';
@@ -44,11 +45,14 @@ export function KanbanBoard({
 
   const updateServerTask = useCallback(async (taskId: string, status?: TaskStatus, sortOrder?: number) => {
     try {
-      await fetch(`/api/tasks/${taskId}`, {
+      const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, sortOrder }),
       });
+      if (!res.ok) {
+        console.error('Failed to update task on server, status code:', res.status);
+      }
     } catch (err) {
       console.error('Failed to sync task status with server', err);
     }
@@ -59,6 +63,9 @@ export function KanbanBoard({
       activationConstraint: {
         distance: 5, // 5px movement required before drag starts to allow clicks
       },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
@@ -106,39 +113,46 @@ export function KanbanBoard({
 
     if (activeId === overId) return;
 
-    const activeTaskItem = tasks.find((t) => t.id === activeId);
-    if (!activeTaskItem) return;
+    setTasks((prev) => {
+      const activeIdx = prev.findIndex((t) => t.id === activeId);
+      if (activeIdx === -1) return prev;
 
-    const isOverColumn = COLUMNS.some((col) => col.id === overId);
-    const overTaskItem = tasks.find((t) => t.id === overId);
+      const activeItem = prev[activeIdx];
+      const isOverColumn = COLUMNS.some((col) => col.id === overId);
 
-    if (isOverColumn) {
-      const targetColumn = overId as TaskStatus;
-      if (activeTaskItem.status !== targetColumn) {
-        const now = new Date().toISOString();
-        setTasks((prev) =>
-          prev.map((t) =>
-            t.id === activeId
-              ? { ...t, status: targetColumn, statusUpdatedAt: now }
-              : t
-          )
-        );
+      if (isOverColumn) {
+        const targetColumn = overId as TaskStatus;
+        if (activeItem.status !== targetColumn) {
+          const updated = [...prev];
+          updated[activeIdx] = {
+            ...activeItem,
+            status: targetColumn,
+            statusUpdatedAt: new Date().toISOString(),
+          };
+          return updated;
+        }
+        return prev;
       }
-    } else if (overTaskItem && activeTaskItem.status !== overTaskItem.status) {
-      const now = new Date().toISOString();
-      setTasks((prev) => {
-        const activeIdx = prev.findIndex((t) => t.id === activeId);
-        const overIdx = prev.findIndex((t) => t.id === overId);
 
+      // Over another task item
+      const overIdx = prev.findIndex((t) => t.id === overId);
+      if (overIdx === -1) return prev;
+
+      const overItem = prev[overIdx];
+      if (activeItem.status !== overItem.status) {
         const updated = [...prev];
         updated[activeIdx] = {
-          ...updated[activeIdx],
-          status: overTaskItem.status,
-          statusUpdatedAt: now,
+          ...activeItem,
+          status: overItem.status,
+          statusUpdatedAt: new Date().toISOString(),
         };
         return arrayMove(updated, activeIdx, overIdx);
-      });
-    }
+      } else if (activeIdx !== overIdx) {
+        return arrayMove(prev, activeIdx, overIdx);
+      }
+
+      return prev;
+    });
   };
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -150,37 +164,56 @@ export function KanbanBoard({
     const activeId = active.id as string;
     const overId = over.id as string;
 
-    const activeTaskItem = tasks.find((t) => t.id === activeId);
-    if (!activeTaskItem) return;
+    setTasks((prev) => {
+      const activeIdx = prev.findIndex((t) => t.id === activeId);
+      if (activeIdx === -1) return prev;
 
-    const isOverColumn = COLUMNS.some((col) => col.id === overId);
+      let nextTasks = [...prev];
+      let finalStatus = nextTasks[activeIdx].status;
 
-    if (isOverColumn) {
-      const targetStatus = overId as TaskStatus;
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === activeId ? { ...t, status: targetStatus } : t
-        )
-      );
-      updateServerTask(activeId, targetStatus);
-    } else {
-      const overTaskItem = tasks.find((t) => t.id === overId);
-      if (overTaskItem) {
-        const activeIdx = tasks.findIndex((t) => t.id === activeId);
-        const overIdx = tasks.findIndex((t) => t.id === overId);
-
-        if (activeIdx !== overIdx || activeTaskItem.status !== overTaskItem.status) {
-          setTasks((prev) =>
-            arrayMove(prev, activeIdx, overIdx).map((t, idx) =>
-              t.id === activeId
-                ? { ...t, status: overTaskItem.status, sortOrder: idx }
-                : { ...t, sortOrder: idx }
-            )
-          );
-          updateServerTask(activeId, overTaskItem.status);
+      const isOverColumn = COLUMNS.some((col) => col.id === overId);
+      if (isOverColumn) {
+        finalStatus = overId as TaskStatus;
+        if (nextTasks[activeIdx].status !== finalStatus) {
+          nextTasks[activeIdx] = {
+            ...nextTasks[activeIdx],
+            status: finalStatus,
+            statusUpdatedAt: new Date().toISOString(),
+          };
+        }
+      } else {
+        const overIdx = prev.findIndex((t) => t.id === overId);
+        if (overIdx !== -1) {
+          const overItem = prev[overIdx];
+          finalStatus = overItem.status;
+          if (nextTasks[activeIdx].status !== overItem.status) {
+            nextTasks[activeIdx] = {
+              ...nextTasks[activeIdx],
+              status: finalStatus,
+              statusUpdatedAt: new Date().toISOString(),
+            };
+          }
+          if (activeIdx !== overIdx) {
+            nextTasks = arrayMove(nextTasks, activeIdx, overIdx);
+          }
         }
       }
-    }
+
+      // Find the index of the task within its destination column to assign sortOrder
+      const columnTasks = nextTasks.filter((t) => t.status === finalStatus);
+      const colIndex = columnTasks.findIndex((t) => t.id === activeId);
+      const newSortOrder = colIndex >= 0 ? colIndex : 0;
+
+      // Update sortOrder on the object in local state
+      nextTasks = nextTasks.map((t) =>
+        t.id === activeId ? { ...t, sortOrder: newSortOrder } : t
+      );
+
+      // Persist to server (status & sortOrder)
+      updateServerTask(activeId, finalStatus, newSortOrder);
+
+      return nextTasks;
+    });
   };
 
   // Filter tasks based on search & source filters
@@ -206,6 +239,7 @@ export function KanbanBoard({
 
   return (
     <DndContext
+      id="notificurom-dnd-board"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={onDragStart}

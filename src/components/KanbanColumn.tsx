@@ -13,7 +13,6 @@ import {
   CheckCircle,
   ArrowUpDown,
 } from 'lucide-react';
-import { parseISO } from 'date-fns';
 
 export type SortMode = 'default' | 'oldest' | 'newest' | 'stalled';
 
@@ -87,24 +86,26 @@ export function KanbanColumn({
   // Sorting
   const sortedTasks = [...tasks].sort((a, b) => {
     if (sortMode === 'oldest') {
-      return parseISO(a.sourceCreatedAt).getTime() - parseISO(b.sourceCreatedAt).getTime();
+      return new Date(a.sourceCreatedAt).getTime() - new Date(b.sourceCreatedAt).getTime();
     }
     if (sortMode === 'newest') {
-      return parseISO(b.sourceCreatedAt).getTime() - parseISO(a.sourceCreatedAt).getTime();
+      return new Date(b.sourceCreatedAt).getTime() - new Date(a.sourceCreatedAt).getTime();
     }
     if (sortMode === 'stalled') {
-      return parseISO(a.statusUpdatedAt).getTime() - parseISO(b.statusUpdatedAt).getTime();
+      return new Date(a.statusUpdatedAt).getTime() - new Date(b.statusUpdatedAt).getTime();
     }
     // default order: sortOrder then sourceCreatedAt desc
     if (a.sortOrder !== b.sortOrder) {
       return a.sortOrder - b.sortOrder;
     }
-    return parseISO(b.sourceCreatedAt).getTime() - parseISO(a.sourceCreatedAt).getTime();
+    return new Date(b.sourceCreatedAt).getTime() - new Date(a.sourceCreatedAt).getTime();
   });
 
   return (
     <div
       ref={setNodeRef}
+      data-column-id={id}
+      data-testid={`column-${id}`}
       className={`flex flex-col flex-1 min-w-[300px] max-w-[360px] bg-zinc-950/80 border border-zinc-800/80 rounded-xl overflow-hidden shadow-lg transition-colors border-t-4 ${
         config.accentColor
       } ${isOver ? 'ring-2 ring-indigo-500/50 bg-zinc-900/50' : ''}`}

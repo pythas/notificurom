@@ -52,17 +52,18 @@ export class GitHubIngestor implements Ingestor {
 
   async isEnabled(): Promise<boolean> {
     const config = await getAppConfig();
-    return Boolean(config.githubPat && config.githubPat.trim().length > 0);
+    return Boolean(config.githubAccessToken && config.githubAccessToken.trim().length > 0);
   }
 
   async getCurrentUser(): Promise<string | null> {
     const config = await getAppConfig();
-    if (!config.githubPat) return null;
+    if (!config.githubAccessToken) return null;
+    if (config.githubUser?.login) return config.githubUser.login;
     try {
       const res = await fetch('https://api.github.com/user', {
         headers: {
           Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${config.githubPat.trim()}`,
+          Authorization: `Bearer ${config.githubAccessToken.trim()}`,
           'X-GitHub-Api-Version': '2022-11-28',
           'User-Agent': 'Notificurom-GTD-App',
         },
@@ -105,7 +106,7 @@ export class GitHubIngestor implements Ingestor {
 
   async fetchItems(): Promise<NormalizedItem[]> {
     const config = await getAppConfig();
-    if (!config.githubPat) {
+    if (!config.githubAccessToken) {
       return [];
     }
 
@@ -119,7 +120,7 @@ export class GitHubIngestor implements Ingestor {
       const response = await fetch(url, {
         headers: {
           Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${config.githubPat.trim()}`,
+          Authorization: `Bearer ${config.githubAccessToken.trim()}`,
           'X-GitHub-Api-Version': '2022-11-28',
           'User-Agent': 'Notificurom-GTD-App',
         },
@@ -178,7 +179,7 @@ export class GitHubIngestor implements Ingestor {
   async checkItemsStatus(sourceIds: string[]): Promise<Map<string, GitHubItemStatus>> {
     const config = await getAppConfig();
     const result = new Map<string, GitHubItemStatus>();
-    if (!config.githubPat || sourceIds.length === 0) return result;
+    if (!config.githubAccessToken || sourceIds.length === 0) return result;
 
     const currentUser = await this.getCurrentUser();
     const currentUsername = currentUser ? currentUser.toLowerCase() : null;
@@ -193,7 +194,7 @@ export class GitHubIngestor implements Ingestor {
 
     const headers = {
       Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${config.githubPat.trim()}`,
+      Authorization: `Bearer ${config.githubAccessToken.trim()}`,
       'X-GitHub-Api-Version': '2022-11-28',
       'User-Agent': 'Notificurom-GTD-App',
     };

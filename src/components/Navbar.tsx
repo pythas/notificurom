@@ -10,8 +10,10 @@ import {
   X,
   FilterX,
   Check,
+  LogIn,
 } from 'lucide-react';
 import { formatRelativeShort, useMounted } from '@/lib/date-utils';
+import { GitHubUserSession } from '@/lib/config';
 
 interface NavbarProps {
   onSync: () => Promise<void>;
@@ -26,6 +28,9 @@ interface NavbarProps {
   onOpenSettings: () => void;
   onOpenNewTask: () => void;
   totalTaskCount: number;
+  isConnected: boolean;
+  isConfigured: boolean;
+  user: GitHubUserSession | null;
 }
 
 export function Navbar({
@@ -41,6 +46,9 @@ export function Navbar({
   onOpenSettings,
   onOpenNewTask,
   totalTaskCount,
+  isConnected,
+  isConfigured,
+  user,
 }: NavbarProps) {
   const mounted = useMounted();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -165,8 +173,50 @@ export function Navbar({
           )}
         </div>
 
-        {/* Right: Actions (Sync, Add, Settings) */}
+        {/* Right: Actions (Sync, Connect/User, Add, Settings) */}
         <div className="flex items-center gap-2 shrink-0">
+          {isConnected && user ? (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-300 hover:border-zinc-700 hover:bg-zinc-800 transition-colors"
+              title={`Connected as @${user.login}${user.name ? ` (${user.name})` : ''}`}
+            >
+              {user.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.avatarUrl}
+                  alt={user.login}
+                  className="w-4 h-4 rounded-full ring-1 ring-zinc-700"
+                />
+              ) : (
+                <span className="w-4 h-4 rounded-full bg-indigo-600 text-[10px] text-white flex items-center justify-center font-bold">
+                  {user.login.charAt(0).toUpperCase()}
+                </span>
+              )}
+              <span className="hidden sm:inline font-medium text-zinc-200">@{user.login}</span>
+            </button>
+          ) : isConfigured ? (
+            <a
+              href="/api/auth/github/login"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-700/60 hover:border-indigo-600 text-indigo-200 rounded-lg text-xs font-medium transition-colors"
+              title="Connect GitHub Account"
+            >
+              <LogIn className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Connect GitHub</span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-700/60 hover:border-indigo-600 text-indigo-200 rounded-lg text-xs font-medium transition-colors"
+              title="Configure and Connect GitHub"
+            >
+              <LogIn className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Connect GitHub</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onSync}
@@ -203,7 +253,7 @@ export function Navbar({
             type="button"
             onClick={onOpenSettings}
             className="p-2 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded-lg border border-zinc-800/80 transition-colors"
-            title="Configure GitHub PAT & Settings"
+            title="Configure Settings & Integrations"
           >
             <Settings className="w-4 h-4" />
           </button>

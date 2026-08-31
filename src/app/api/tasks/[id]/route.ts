@@ -23,9 +23,11 @@ export async function PATCH(
       updatedAt: now,
     };
 
-    if (body.status && body.status !== existing.status) {
+    if (body.status !== undefined) {
       updates.status = body.status as TaskStatus;
-      updates.statusUpdatedAt = now;
+      if (body.status !== existing.status) {
+        updates.statusUpdatedAt = now;
+      }
     }
 
     if (typeof body.sortOrder === 'number') {

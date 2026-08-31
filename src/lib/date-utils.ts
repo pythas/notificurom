@@ -1,4 +1,3 @@
-import { differenceInDays, differenceInHours, differenceInMinutes, parseISO } from 'date-fns';
 import { useSyncExternalStore } from 'react';
 
 const emptySubscribe = () => () => {};
@@ -21,25 +20,45 @@ export interface AgeInfo {
   urgency: AgeUrgency;
 }
 
-export function formatRelativeShort(dateString: string): string {
+export function parseDate(dateInput: string | number | Date): Date {
+  return dateInput instanceof Date ? dateInput : new Date(dateInput);
+}
+
+export function formatRelativeShort(dateString: string | number | Date): string {
   try {
-    const date = typeof dateString === 'string' ? parseISO(dateString) : new Date(dateString);
-    const now = new Date();
-    
-    const minutes = differenceInMinutes(now, date);
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes}m`;
-    
-    const hours = differenceInHours(now, date);
-    if (hours < 24) return `${hours}h`;
-    
-    const days = differenceInDays(now, date);
-    if (days < 30) return `${days}d`;
-    
-    const months = Math.floor(days / 30);
-    return `${months}mo`;
+    const date = parseDate(dateString);
+    const time = date.getTime();
+    if (Number.isNaN(time)) return 'unknown';
+
+    const now = Date.now();
+    const diffMs = Math.max(0, now - time);
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+    if (diffMinutes < 1) return 'just now';
+    if (diffMinutes < 60) return `${diffMinutes}m`;
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h`;
+
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) return `${diffDays}d`;
+
+    const diffMonths = Math.floor(diffDays / 30);
+    return `${diffMonths}mo`;
   } catch {
     return 'unknown';
+  }
+}
+
+export function getDaysDifference(pastDateString: string | number | Date): number {
+  try {
+    const date = parseDate(pastDateString);
+    const time = date.getTime();
+    if (Number.isNaN(time)) return 0;
+    const now = Date.now();
+    return Math.max(0, Math.floor((now - time) / (1000 * 60 * 60 * 24)));
+  } catch {
+    return 0;
   }
 }
 
@@ -58,27 +77,10 @@ export function getTaskAgeInfo(
     };
   }
 
-  let totalDays = 0;
-  let stalledDays = 0;
-
-  try {
-    const createdDate = parseISO(sourceCreatedAt);
-    const now = new Date();
-    totalDays = differenceInDays(now, createdDate);
-  } catch {
-    totalDays = 0;
-  }
-
-  try {
-    const statusDate = parseISO(statusUpdatedAt);
-    const now = new Date();
-    stalledDays = differenceInDays(now, statusDate);
-  } catch {
-    stalledDays = 0;
-  }
+  const totalDays = getDaysDifference(sourceCreatedAt);
+  const stalledDays = getDaysDifference(statusUpdatedAt);
 
   let urgency: AgeUrgency = 'fresh';
-  // If created > 5 days ago or stuck in non-inbox/non-done column > 4 days
   if (totalDays >= 7 || stalledDays >= 5) {
     urgency = 'critical';
   } else if (totalDays >= 3 || stalledDays >= 2) {
